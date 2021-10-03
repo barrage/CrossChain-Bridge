@@ -10,7 +10,9 @@ Admins = [
 
 # modgodb database connection config (server only)
 [Server.MongoDB]
-DBURL = "localhost:27017"
+# DBURLs is prefered if exists. forbids set both DBURL and DBURLs.
+#DBURL = "localhost:27017,localhost:12345"
+#DBURLs = ["localhost:27017", "localhost:12345"]
 DBName = "databasename"
 UserName = "username"
 Password = "password"
@@ -66,6 +68,16 @@ InitialHeight = 0
 EnableScan = false
 # whether enable scan txs in pool
 EnableScanPool = false
+# enable pass big value swap job
+EnablePassBigValue = false
+# enable check tx block hash (prevent in orphan block)
+EnableCheckTxBlockHash = false
+# enable check tx block index (prevent in orphan block)
+EnableCheckTxBlockIndex = false
+# enable replace swap job
+EnableReplaceSwap = false
+# enable building dynamic fee tx
+EnableDynamicFeeTx = false
 # whether scan transaction receipt logs
 ScanReceipt = false
 # max gas price fluct percent
@@ -76,8 +88,6 @@ ReplacePlusGasPricePercent = 1
 WaitTimeToReplace = 900
 # max replace swap count
 MaxReplaceCount = 20
-# enable replace swap job
-EnableReplaceSwap = false
 
 # source blockchain gateway config
 [SrcGateway]
@@ -96,6 +106,16 @@ InitialHeight = 0
 EnableScan = false
 # whether enable scan txs in pool
 EnableScanPool = false
+# enable pass big value swap job
+EnablePassBigValue = false
+# enable check tx block hash (prevent in orphan block)
+EnableCheckTxBlockHash = false
+# enable check tx block index (prevent in orphan block)
+EnableCheckTxBlockIndex = false
+# enable replace swap job
+EnableReplaceSwap = false
+# enable building dynamic fee tx
+EnableDynamicFeeTx = false
 # base fee percent, must be in range [-90, 500]
 BaseFeePercent = 0
 # max gas price fluct percent
@@ -106,16 +126,13 @@ ReplacePlusGasPricePercent = 1
 WaitTimeToReplace = 900
 # max replace swap count
 MaxReplaceCount = 20
-# enable replace swap job
-EnableReplaceSwap = false
 # use fixed gas price (no adjust)
 FixedGasPrice = "5000000001"
 # maximum gas price
 MaxGasPrice = "50000000000"
-# minimum reserve coin for gas provide
-MinReserveFee = "10000000000000000"
+# minimum reserve coin for gas provide (defaults to 1e17 wei)
+MinReserveFee = "100000000000000000"
 # dynamic fee tx related (EIP-1559)
-IsDynamicFeeTxEnabled = false
 PlusGasTipCapPercent = 10
 PlusGasFeeCapPercent = 10
 BlockCountFeeHistory = 3

@@ -13,9 +13,23 @@ import (
 	"github.com/anyswap/CrossChain-Bridge/types"
 )
 
+var (
+	// ensure Bridge impl tokens.CrossChainBridge
+	_ tokens.CrossChainBridge = &Bridge{}
+	// ensure Bridge impl tokens.NonceSetter
+	_ tokens.NonceSetter = &Bridge{}
+	// ensure Bridge impl InheritInterface
+	_ InheritInterface = &Bridge{}
+)
+
+// InheritInterface inherit interface
+type InheritInterface interface {
+	GetLatestBlockNumberOf(apiAddress string) (uint64, error)
+}
+
 // Bridge eth bridge
 type Bridge struct {
-	Inherit interface{}
+	Inherit InheritInterface
 	*tokens.CrossChainBridgeBase
 	*NonceSetterBase
 	Signer        types.Signer
@@ -24,10 +38,12 @@ type Bridge struct {
 
 // NewCrossChainBridge new bridge
 func NewCrossChainBridge(isSrc bool) *Bridge {
-	return &Bridge{
+	bridge := &Bridge{
 		CrossChainBridgeBase: tokens.NewCrossChainBridgeBase(isSrc),
 		NonceSetterBase:      NewNonceSetterBase(),
 	}
+	bridge.Inherit = bridge
+	return bridge
 }
 
 // SetChainAndGateway set chain and gateway config
@@ -91,7 +107,7 @@ func (b *Bridge) VerifyChainID() {
 
 // MakeSigner make signer
 func (b *Bridge) MakeSigner(chainID *big.Int) types.Signer {
-	if b.ChainConfig.IsDynamicFeeTxEnabled {
+	if b.ChainConfig.EnableDynamicFeeTx {
 		return types.MakeSigner("London", chainID)
 	}
 	return types.MakeSigner("EIP155", chainID)

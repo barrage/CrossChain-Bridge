@@ -13,17 +13,20 @@ import (
 
 // GetTransactionStatus impl
 func (b *Bridge) GetTransactionStatus(txHash string) (*tokens.TxStatus, error) {
-	txStatus := &tokens.TxStatus{}
 	txr, url, err := b.GetTransactionReceipt(txHash)
 	if err != nil {
 		log.Trace("GetTransactionReceipt fail", "hash", txHash, "err", err)
-		return txStatus, err
+		return nil, err
 	}
+
+	txStatus := &tokens.TxStatus{}
+	txStatus.Receipt = txr
 	txStatus.BlockHeight = txr.BlockNumber.ToInt().Uint64()
 	txStatus.BlockHash = txr.BlockHash.String()
+
 	if txStatus.BlockHeight != 0 {
 		for i := 0; i < 3; i++ {
-			latest, errt := b.GetLatestBlockNumberOf(url)
+			latest, errt := b.Inherit.GetLatestBlockNumberOf(url)
 			if errt == nil {
 				if latest > txStatus.BlockHeight {
 					txStatus.Confirmations = latest - txStatus.BlockHeight
@@ -33,7 +36,6 @@ func (b *Bridge) GetTransactionStatus(txHash string) (*tokens.TxStatus, error) {
 			time.Sleep(1 * time.Second)
 		}
 	}
-	txStatus.Receipt = txr
 	return txStatus, nil
 }
 
@@ -50,7 +52,8 @@ func (b *Bridge) VerifyMsgHash(rawTx interface{}, msgHashes []string) error {
 	signer := b.Signer
 	sigHash := signer.Hash(tx)
 	if sigHash.String() != msgHash {
-		log.Trace("message hash mismatch", "want", msgHash, "have", sigHash.String())
+		logFunc := log.GetPrintFuncOr(params.IsDebugMode, log.Info, log.Trace)
+		logFunc("message hash mismatch", "want", msgHash, "have", sigHash.String(), "tx", tx.RawStr())
 		return tokens.ErrMsgHashMismatch
 	}
 	return nil
@@ -58,9 +61,9 @@ func (b *Bridge) VerifyMsgHash(rawTx interface{}, msgHashes []string) error {
 
 func getTxByHash(b *Bridge, txHash string, withExt bool) (*types.RPCTransaction, error) {
 	gateway := b.GatewayConfig
-	tx, err := getTransactionByHash(txHash, gateway.APIAddress)
+	tx, err := b.getTransactionByHash(txHash, gateway.APIAddress)
 	if err != nil && withExt && len(gateway.APIAddressExt) > 0 {
-		tx, err = getTransactionByHash(txHash, gateway.APIAddressExt)
+		tx, err = b.getTransactionByHash(txHash, gateway.APIAddressExt)
 	}
 	return tx, err
 }
@@ -139,6 +142,7 @@ func (b *Bridge) getReceipt(swapInfo *tokens.TxSwapInfo, allowUnstable bool) (*t
 	}
 	receipt, _, err := b.GetTransactionReceipt(swapInfo.Hash)
 	if err != nil {
+		log.Error("get tx receipt failed", "hash", swapInfo.Hash, "err", err)
 		return nil, err
 	}
 	swapInfo.Height = receipt.BlockNumber.ToInt().Uint64() // Height
@@ -159,6 +163,9 @@ func (b *Bridge) getStableReceipt(swapInfo *tokens.TxSwapInfo) (*types.RPCTxRece
 	swapInfo.Height = txStatus.BlockHeight  // Height
 	swapInfo.Timestamp = txStatus.BlockTime // Timestamp
 	if txStatus.BlockHeight < *b.ChainConfig.InitialHeight {
+		log.Warn("transaction before initial block height",
+			"initialHeight", *b.ChainConfig.InitialHeight,
+			"blockHeight", txStatus.BlockHeight)
 		return nil, tokens.ErrTxBeforeInitialHeight
 	}
 	if txStatus.Confirmations < *b.GetChainConfig().Confirmations {

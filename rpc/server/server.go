@@ -51,6 +51,9 @@ func StartAPIServer() {
 	}
 	go func() {
 		if err := svr.ListenAndServe(); err != nil {
+			if err == http.ErrServerClosed && utils.IsCleanuping() {
+				return
+			}
 			log.Fatal("ListenAndServe error", "err", err)
 		}
 	}()
@@ -85,7 +88,6 @@ func initRouter(r *mux.Router) {
 	r.HandleFunc("/nonceinfo", restapi.NonceInfoHandler).Methods("GET")
 	r.HandleFunc("/pairinfo/{pairid}", restapi.TokenPairInfoHandler).Methods("GET")
 	r.HandleFunc("/pairsinfo/{pairids}", restapi.TokenPairsInfoHandler).Methods("GET")
-	r.HandleFunc("/statistics/{pairid}", restapi.StatisticsHandler).Methods("GET")
 
 	r.HandleFunc("/swapin/post/{pairid}/{txid}", restapi.PostSwapinHandler).Methods("POST")
 	r.HandleFunc("/swapout/post/{pairid}/{txid}", restapi.PostSwapoutHandler).Methods("POST")

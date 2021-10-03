@@ -21,7 +21,7 @@ var (
 
 // IsSwapExist is swapin exist
 func IsSwapExist(txid, pairID, bind string, isSwapin bool) bool {
-	if mongodb.HasSession() {
+	if mongodb.HasClient() {
 		swap, _ := mongodb.FindSwap(isSwapin, txid, pairID, bind)
 		return swap != nil
 	}
@@ -77,7 +77,7 @@ func registerSwap(isSwapin bool, txid string, swapInfos []*tokens.TxSwapInfo, ve
 		}
 		isServer := dcrm.IsSwapServer()
 		log.Info("[scan] register swap", "pairID", pairID, "isSwapin", isSwapin, "isServer", isServer, "tx", txid, "bind", bind)
-		if isServer && mongodb.HasSession() {
+		if isServer && mongodb.HasClient() {
 			var memo string
 			if verifyError != nil {
 				memo = verifyError.Error()
@@ -135,7 +135,7 @@ func RegisterP2shSwapin(txid string, swapInfo *tokens.TxSwapInfo, verifyError er
 	isServer := dcrm.IsSwapServer()
 	bind := swapInfo.Bind
 	log.Info("[scan] register p2sh swapin", "isServer", isServer, "tx", txid, "bind", bind)
-	if isServer && mongodb.HasSession() {
+	if isServer && mongodb.HasClient() {
 		var memo string
 		if verifyError != nil {
 			memo = verifyError.Error()
@@ -170,7 +170,7 @@ func RegisterP2shSwapin(txid string, swapInfo *tokens.TxSwapInfo, verifyError er
 
 // GetP2shBindAddress get p2sh bind address
 func GetP2shBindAddress(p2shAddress string) (bindAddress string) {
-	if mongodb.HasSession() {
+	if mongodb.HasClient() {
 		bindAddress, _ = mongodb.FindP2shBindAddress(p2shAddress)
 		return bindAddress
 	}
@@ -187,8 +187,8 @@ func GetP2shBindAddress(p2shAddress string) (bindAddress string) {
 
 // GetLatestScanHeight get latest scanned block height
 func GetLatestScanHeight(isSrc bool) uint64 {
-	if mongodb.HasSession() {
-		for {
+	if mongodb.HasClient() {
+		for i := 0; i < 3; i++ {
 			latestInfo, err := mongodb.FindLatestScanInfo(isSrc)
 			if err == nil {
 				height := latestInfo.BlockHeight
@@ -197,9 +197,10 @@ func GetLatestScanHeight(isSrc bool) uint64 {
 			}
 			time.Sleep(1 * time.Second)
 		}
+		return 0
 	}
 	var result mongodb.MgoLatestScanInfo
-	for {
+	for i := 0; i < 3; i++ {
 		err := client.RPCPostWithTimeout(swapRPCTimeout, &result, params.ServerAPIAddress, "swap.GetLatestScanInfo", isSrc)
 		if err == nil {
 			height := result.BlockHeight
@@ -208,6 +209,7 @@ func GetLatestScanHeight(isSrc bool) uint64 {
 		}
 		time.Sleep(1 * time.Second)
 	}
+	return 0
 }
 
 // LoopGetLatestBlockNumber loop and get latest block number
@@ -225,7 +227,7 @@ func LoopGetLatestBlockNumber(b tokens.CrossChainBridge) uint64 {
 
 // UpdateLatestScanInfo update latest scan info
 func UpdateLatestScanInfo(isSrc bool, height uint64) error {
-	if dcrm.IsSwapServer() && mongodb.HasSession() {
+	if dcrm.IsSwapServer() && mongodb.HasClient() {
 		return mongodb.UpdateLatestScanInfo(isSrc, height)
 	}
 	return nil
@@ -233,7 +235,7 @@ func UpdateLatestScanInfo(isSrc bool, height uint64) error {
 
 // IsAddressRegistered is address registered
 func IsAddressRegistered(address string) bool {
-	if mongodb.HasSession() {
+	if mongodb.HasClient() {
 		result, _ := mongodb.FindRegisteredAddress(address)
 		return result != nil
 	}

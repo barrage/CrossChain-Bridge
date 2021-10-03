@@ -13,6 +13,7 @@ import (
 )
 
 var (
+	errSwapWithErrStatus  = errors.New("swap with error status to replace")
 	errSwapTxWithHeight   = errors.New("swaptx with block height")
 	errSwapTxIsOnChain    = errors.New("swaptx exist in chain")
 	errGetNonceFailed     = errors.New("get nonce failed")
@@ -49,6 +50,9 @@ func verifyReplaceSwap(txid, pairID, bind string, isSwapin bool) (*mongodb.MgoSw
 	}
 	if res.SwapHeight != 0 {
 		return nil, nil, errSwapTxWithHeight
+	}
+	if res.Status != mongodb.MatchTxNotStable {
+		return nil, nil, errSwapWithErrStatus
 	}
 
 	bridge := tokens.GetCrossChainBridge(!isSwapin)
@@ -195,7 +199,7 @@ func replaceSwap(txid, pairID, bind, gasPriceStr string, isSwapin bool) (txHash 
 	if err != nil {
 		return "", errUpdateOldTxsFailed
 	}
-	txHash, err = sendSignedTransaction(bridge, signedTx, txid, pairID, bind, isSwapin)
+	txHash, err = sendSignedTransaction(bridge, signedTx, args)
 	if err == nil && txHash != signTxHash {
 		logWorkerError("replaceSwap", "send tx success but with different hash", errSendTxWithDiffHash, "pairID", pairID, "txid", txid, "bind", bind, "isSwapin", isSwapin, "swapNonce", nonce, "txHash", txHash, "signTxHash", signTxHash)
 		_ = replaceSwapResult(txid, pairID, bind, txHash, swapValue, isSwapin)
