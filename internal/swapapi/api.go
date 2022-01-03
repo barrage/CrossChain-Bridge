@@ -3,8 +3,10 @@ package swapapi
 import (
 	"encoding/hex"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/anyswap/CrossChain-Bridge/dcrm"
 	"github.com/anyswap/CrossChain-Bridge/log"
 	"github.com/anyswap/CrossChain-Bridge/mongodb"
 	"github.com/anyswap/CrossChain-Bridge/params"
@@ -18,6 +20,8 @@ var (
 	errNotBtcBridge      = newRPCError(-32096, "bridge is not btc")
 	errTokenPairNotExist = newRPCError(-32095, "token pair not exist")
 	errSwapCannotRetry   = newRPCError(-32094, "swap can not retry")
+
+	oraclesHeartbeats sync.Map // string -> int64 // key is enode
 )
 
 func newRPCError(ec rpcjson.ErrorCode, message string) error {
@@ -46,6 +50,56 @@ func GetServerInfo() (*ServerInfo, error) {
 		PairIDs:             tokens.GetAllPairIDs(),
 		Version:             params.VersionWithMeta,
 	}, nil
+}
+
+// UpdateOracleHeartbeat api
+func UpdateOracleHeartbeat(oracle string, timestamp int64) error {
+	var exist bool
+	for _, enode := range dcrm.GetAllEnodes() {
+		if strings.EqualFold(oracle, enode) {
+			if !strings.EqualFold(oracle, dcrm.GetSelfEnode()) {
+				exist = true
+			}
+			break
+		}
+	}
+	if !exist {
+		return newRPCError(-32000, "wrong oracle info")
+	}
+	key := strings.ToLower(oracle)
+	value, ok := oraclesHeartbeats.Load(key)
+	if ok {
+		oldTime := value.(int64)
+		if timestamp > oldTime && timestamp < time.Now().Unix()+60 {
+			oraclesHeartbeats.Store(key, timestamp)
+		}
+	} else {
+		oraclesHeartbeats.Store(key, timestamp)
+	}
+	return nil
+}
+
+// GetOraclesHeartbeat api
+func GetOraclesHeartbeat() map[string]string {
+	result := make(map[string]string, 4)
+	oraclesHeartbeats.Range(func(k, v interface{}) bool {
+		enode := k.(string)
+		startIndex := strings.Index(enode, "enode://")
+		endIndex := strings.Index(enode, "@")
+		if startIndex != -1 && endIndex != -1 {
+			enodeID := enode[startIndex+8 : endIndex]
+			timestamp := v.(int64)
+			timeStr := time.Unix(timestamp, 0).Format(time.RFC3339)
+			result[strings.ToLower(enodeID)] = timeStr
+		}
+		return true
+	})
+	return result
+}
+
+// GetStatusInfo api
+func GetStatusInfo(status string) (map[string]map[string]interface{}, error) {
+	return mongodb.GetStatusInfo(status)
 }
 
 // GetTokenPairInfo api
@@ -259,6 +313,7 @@ func addSwapToDatabase(txid string, txType tokens.SwapTxType, swapInfo *tokens.T
 		TxID:      txid,
 		TxTo:      swapInfo.TxTo,
 		TxType:    uint32(txType),
+		From:      swapInfo.From,
 		Bind:      swapInfo.Bind,
 		Status:    mongodb.GetStatusByTokenVerifyError(verifyError),
 		Timestamp: time.Now().Unix(),
@@ -354,6 +409,7 @@ func P2shSwapin(txid, bindAddr *string) (*PostResult, error) {
 		TxID:      txidstr,
 		TxTo:      swapInfo.TxTo,
 		TxType:    uint32(tokens.P2shSwapinTx),
+		From:      swapInfo.From,
 		Bind:      *bindAddr,
 		Status:    mongodb.GetStatusByTokenVerifyError(err),
 		Timestamp: time.Now().Unix(),

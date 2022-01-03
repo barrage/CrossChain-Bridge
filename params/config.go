@@ -25,6 +25,9 @@ var (
 
 	// ServerAPIAddress server api address
 	ServerAPIAddress string
+
+	// GetBalanceBlockNumberOpt pending or latest
+	GetBalanceBlockNumberOpt = "latest"
 )
 
 // BridgeConfig config items (decode from toml file)
@@ -34,6 +37,7 @@ type BridgeConfig struct {
 	SrcGateway  *tokens.GatewayConfig
 	DestChain   *tokens.ChainConfig
 	DestGateway *tokens.GatewayConfig
+	TokenPrice  *tokens.TokenPriceConfig
 	Server      *ServerConfig          `toml:",omitempty" json:",omitempty"`
 	Oracle      *OracleConfig          `toml:",omitempty" json:",omitempty"`
 	BtcExtra    *tokens.BtcExtraConfig `toml:",omitempty" json:",omitempty"`
@@ -43,9 +47,10 @@ type BridgeConfig struct {
 
 // ServerConfig swap server config
 type ServerConfig struct {
-	MongoDB   *MongoDBConfig   `toml:",omitempty" json:",omitempty"`
-	APIServer *APIServerConfig `toml:",omitempty" json:",omitempty"`
-	Admins    []string         `toml:",omitempty" json:",omitempty"`
+	MongoDB    *MongoDBConfig   `toml:",omitempty" json:",omitempty"`
+	APIServer  *APIServerConfig `toml:",omitempty" json:",omitempty"`
+	Admins     []string         `toml:",omitempty" json:",omitempty"`
+	Assistants []string         `toml:",omitempty" json:",omitempty"`
 }
 
 // DcrmConfig dcrm related config
@@ -75,12 +80,14 @@ type DcrmNodeConfig struct {
 type OracleConfig struct {
 	ServerAPIAddress      string
 	GetAcceptListInterval uint64
+	PendingInvalidAccept  bool `toml:",omitempty" json:",omitempty"`
 }
 
 // APIServerConfig api service config
 type APIServerConfig struct {
-	Port           int
-	AllowedOrigins []string
+	Port             int
+	AllowedOrigins   []string
+	MaxRequestsLimit int
 }
 
 // MongoDBConfig mongodb config
@@ -99,6 +106,7 @@ type ExtraConfig struct {
 	IsSwapoutToStringAddress bool `toml:",omitempty" json:",omitempty"`
 	EnableCheckBlockFork     bool
 	IsNullSwapoutNativeMemo  bool `toml:",omitempty" json:",omitempty"`
+	UsePendingBalance        bool `toml:",omitempty" json:",omitempty"`
 }
 
 // GetAPIPort get api service port
@@ -168,6 +176,7 @@ func GetConfig() *BridgeConfig {
 // SetConfig set bridge config
 func SetConfig(config *BridgeConfig) {
 	bridgeConfig = config
+	tokens.TokenPriceCfg = config.TokenPrice
 }
 
 // GetServerConfig get server config
@@ -183,6 +192,11 @@ func GetOracleConfig() *OracleConfig {
 // GetExtraConfig get extra config
 func GetExtraConfig() *ExtraConfig {
 	return GetConfig().Extra
+}
+
+// GetTokenPriceConfig get token price config
+func GetTokenPriceConfig() *tokens.TokenPriceConfig {
+	return GetConfig().TokenPrice
 }
 
 // LoadConfig load config
@@ -217,6 +231,7 @@ func LoadConfig(configFile string, isServer bool) *BridgeConfig {
 		if err := CheckConfig(isServer); err != nil {
 			log.Fatalf("Check config failed. %v", err)
 		}
+		log.Info("Check config success", "isServer", isServer, "configFile", configFile)
 	})
 	return bridgeConfig
 }
@@ -230,6 +245,16 @@ func HasAdmin() bool {
 func IsAdmin(account string) bool {
 	for _, admin := range GetServerConfig().Admins {
 		if strings.EqualFold(account, admin) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsAssistant is assistant
+func IsAssistant(account string) bool {
+	for _, assistant := range GetServerConfig().Assistants {
+		if strings.EqualFold(account, assistant) {
 			return true
 		}
 	}

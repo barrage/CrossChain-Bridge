@@ -84,18 +84,32 @@ type SwapInfo struct {
 	Reswapping bool       `json:"reswapping,omitempty"`
 }
 
+// IsSwapin is swapin type
+func (s *SwapInfo) IsSwapin() bool {
+	return s.SwapType == SwapinType
+}
+
 // BuildTxArgs struct
 type BuildTxArgs struct {
 	SwapInfo    `json:"swapInfo,omitempty"`
 	From        string     `json:"from,omitempty"`
 	To          string     `json:"to,omitempty"`
+	OriginFrom  string     `json:"originFrom,omitempty"`
+	OriginTxTo  string     `json:"originTxTo,omitempty"`
 	Value       *big.Int   `json:"value,omitempty"`
 	OriginValue *big.Int   `json:"originValue,omitempty"`
 	SwapValue   *big.Int   `json:"swapvalue,omitempty"`
 	Memo        string     `json:"memo,omitempty"`
 	Input       *[]byte    `json:"input,omitempty"`
 	Extra       *AllExtras `json:"extra,omitempty"`
-	ReplaceNum  uint64     `json:"replaceNum,omitempty"`
+}
+
+// GetReplaceNum get rplace swap count
+func (args *BuildTxArgs) GetReplaceNum() uint64 {
+	if args.Extra != nil {
+		return args.Extra.ReplaceNum
+	}
+	return 0
 }
 
 // GetExtraArgs get extra args
@@ -136,8 +150,9 @@ func (args *BuildTxArgs) GetTxGasPrice() *big.Int {
 
 // AllExtras struct
 type AllExtras struct {
-	BtcExtra *BtcExtraArgs `json:"btcExtra,omitempty"`
-	EthExtra *EthExtraArgs `json:"ethExtra,omitempty"`
+	BtcExtra   *BtcExtraArgs `json:"btcExtra,omitempty"`
+	EthExtra   *EthExtraArgs `json:"ethExtra,omitempty"`
+	ReplaceNum uint64        `json:"replaceNum,omitempty"`
 }
 
 // EthExtraArgs struct

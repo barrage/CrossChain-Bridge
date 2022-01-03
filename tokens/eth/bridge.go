@@ -99,18 +99,20 @@ func (b *Bridge) VerifyChainID() {
 		log.Fatalf("gateway chainID '%v' is not '%v'", chainID, b.ChainConfig.NetID)
 	}
 
-	b.SignerChainID = chainID
-	b.Signer = b.MakeSigner(chainID)
+	b.MakeSigner(chainID)
 
 	log.Info("VerifyChainID succeed", "networkID", networkID, "chainID", chainID)
 }
 
 // MakeSigner make signer
-func (b *Bridge) MakeSigner(chainID *big.Int) types.Signer {
+func (b *Bridge) MakeSigner(chainID *big.Int) {
+	b.SignerChainID = chainID
+	b.ChainConfig.SetChainID(chainID)
 	if b.ChainConfig.EnableDynamicFeeTx {
-		return types.MakeSigner("London", chainID)
+		b.Signer = types.MakeSigner("London", chainID)
+	} else {
+		b.Signer = types.MakeSigner("EIP155", chainID)
 	}
-	return types.MakeSigner("EIP155", chainID)
 }
 
 // VerifyTokenConfig verify token config
@@ -144,9 +146,9 @@ func (b *Bridge) verifyDecimals(tokenCfg *tokens.TokenConfig) error {
 	switch strings.ToUpper(tokenCfg.Symbol) {
 	case "ETH", "FSN":
 		if configedDecimals != 18 {
-			return fmt.Errorf("invalid decimals: want 18 but have %v", configedDecimals)
+			return fmt.Errorf("invalid decimals: %v want 18 but have %v", tokenCfg.Symbol, configedDecimals)
 		}
-		log.Info(tokenCfg.Symbol+" verify decimals success", "decimals", configedDecimals)
+		log.Info(tokenCfg.Symbol+" verify decimals success", "decimals", configedDecimals, "symbol", tokenCfg.Symbol)
 	}
 
 	if checkToken != "" {
@@ -156,7 +158,7 @@ func (b *Bridge) verifyDecimals(tokenCfg *tokens.TokenConfig) error {
 			return err
 		}
 		if decimals != configedDecimals {
-			return fmt.Errorf("invalid decimals for %v, want %v but configed %v", tokenCfg.Symbol, decimals, configedDecimals)
+			return fmt.Errorf("invalid decimals for %v token %v, want %v but configed %v", tokenCfg.Symbol, checkToken, decimals, configedDecimals)
 		}
 		log.Info(tokenCfg.Symbol+" verify decimals success", "address", checkToken, "decimals", configedDecimals)
 

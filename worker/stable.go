@@ -120,7 +120,9 @@ func getSwapTxStatus(resBridge tokens.CrossChainBridge, swap *mongodb.MgoSwapRes
 		txStatus, err = resBridge.GetTransactionStatus(oldSwapTx)
 		if err == nil && txStatus != nil && txStatus.BlockHeight > 0 {
 			swap.SwapTx = oldSwapTx
-			swap.SwapValue = swap.OldSwapVals[i]
+			if i < len(swap.OldSwapVals) {
+				swap.SwapValue = swap.OldSwapVals[i]
+			}
 			return txStatus
 		}
 	}
@@ -146,7 +148,7 @@ func processSwapStable(swap *mongodb.MgoSwapResult, isSwapin bool) (err error) {
 			_ = updateSwapResultTx(swap.TxID, swap.PairID, swap.Bind, swap.SwapTx, swap.SwapValue, isSwapin, mongodb.KeepStatus)
 		}
 		if txStatus.IsSwapTxOnChainAndFailed(resBridge.GetTokenConfig(swap.PairID)) {
-			logWorkerWarn("[stable]", "mark swap result failed with wrong status", "pairID", swap.PairID, "txid", swap.TxID, "bind", swap.Bind, "isSwapin", isSwapin, "swaptime", swap.Timestamp, "nowtime", now(), "confirmations", txStatus.Confirmations)
+			logWorkerWarn("stable", "mark swap result failed with wrong status", "pairID", swap.PairID, "txid", swap.TxID, "bind", swap.Bind, "isSwapin", isSwapin, "swaptime", swap.Timestamp, "nowtime", now(), "confirmations", txStatus.Confirmations)
 			return markSwapResultFailed(swap.TxID, swap.PairID, swap.Bind, isSwapin)
 		}
 		return markSwapResultStable(swap.TxID, swap.PairID, swap.Bind, isSwapin)
@@ -171,7 +173,9 @@ func processUpdateSwapHeight(resBridge tokens.CrossChainBridge, swap *mongodb.Mg
 			blockHeight, blockTime = nonceSetter.GetTxBlockInfo(oldSwapTx)
 			if blockHeight > 0 {
 				swap.SwapTx = oldSwapTx
-				swap.SwapValue = swap.OldSwapVals[i]
+				if i < len(swap.OldSwapVals) {
+					swap.SwapValue = swap.OldSwapVals[i]
+				}
 				break
 			}
 		}

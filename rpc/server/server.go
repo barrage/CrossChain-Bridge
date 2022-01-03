@@ -3,6 +3,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -29,6 +30,10 @@ func StartAPIServer() {
 	apiPort := params.GetAPIPort()
 	apiServer := params.GetServerConfig().APIServer
 	allowedOrigins := apiServer.AllowedOrigins
+	maxRequestsLimit := apiServer.MaxRequestsLimit
+	if maxRequestsLimit <= 0 {
+		maxRequestsLimit = 10 // default value
+	}
 
 	corsOptions := []handlers.CORSOption{
 		handlers.AllowedMethods([]string{"GET", "POST"}),
@@ -41,7 +46,11 @@ func StartAPIServer() {
 	}
 
 	log.Info("JSON RPC service listen and serving", "port", apiPort, "allowedOrigins", allowedOrigins)
-	lmt := tollbooth.NewLimiter(10, &limiter.ExpirableOptions{DefaultExpirationTTL: time.Hour})
+	lmt := tollbooth.NewLimiter(float64(maxRequestsLimit),
+		&limiter.ExpirableOptions{
+			DefaultExpirationTTL: 600 * time.Second,
+		},
+	)
 	handler := tollbooth.LimitHandler(lmt, handlers.CORS(corsOptions...)(router))
 	svr := http.Server{
 		Addr:         fmt.Sprintf(":%v", apiPort),
@@ -51,7 +60,7 @@ func StartAPIServer() {
 	}
 	go func() {
 		if err := svr.ListenAndServe(); err != nil {
-			if err == http.ErrServerClosed && utils.IsCleanuping() {
+			if errors.Is(err, http.ErrServerClosed) && utils.IsCleanuping() {
 				return
 			}
 			log.Fatal("ListenAndServe error", "err", err)
@@ -85,7 +94,9 @@ func initRouter(r *mux.Router) {
 
 	r.HandleFunc("/serverinfo", restapi.ServerInfoHandler).Methods("GET")
 	r.HandleFunc("/versioninfo", restapi.VersionInfoHandler).Methods("GET")
+	r.HandleFunc("/oracleinfo", restapi.OracleInfoHandler).Methods("GET")
 	r.HandleFunc("/nonceinfo", restapi.NonceInfoHandler).Methods("GET")
+	r.HandleFunc("/statusinfo", restapi.StatusInfoHandler).Methods("GET")
 	r.HandleFunc("/pairinfo/{pairid}", restapi.TokenPairInfoHandler).Methods("GET")
 	r.HandleFunc("/pairsinfo/{pairids}", restapi.TokenPairsInfoHandler).Methods("GET")
 

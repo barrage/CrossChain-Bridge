@@ -100,17 +100,14 @@ func (b *Bridge) checkSwapinInfo(swapInfo *tokens.TxSwapInfo) error {
 	if swapInfo.Bind == swapInfo.To {
 		return tokens.ErrTxWithWrongSender
 	}
-	if !tokens.CheckSwapValue(swapInfo.PairID, swapInfo.Value, b.IsSrc) {
+	if !tokens.CheckSwapValue(swapInfo, b.IsSrc) {
 		return tokens.ErrTxWithWrongValue
 	}
 	token := b.GetTokenConfig(swapInfo.PairID)
 	if token == nil {
 		return tokens.ErrUnknownPairID
 	}
-	return b.checkSwapinBindAddress(swapInfo.Bind, token.AllowSwapinFromContract)
-}
-
-func (b *Bridge) checkSwapinBindAddress(bindAddr string, allowContractAddress bool) error {
+	bindAddr := swapInfo.Bind
 	if !tokens.DstBridge.IsValidAddress(bindAddr) {
 		log.Warn("wrong bind address in swapin", "bind", bindAddr)
 		return tokens.ErrTxWithWrongMemo
@@ -118,8 +115,9 @@ func (b *Bridge) checkSwapinBindAddress(bindAddr string, allowContractAddress bo
 	if params.MustRegisterAccount() && !tools.IsAddressRegistered(bindAddr) {
 		return tokens.ErrTxSenderNotRegistered
 	}
-	if params.IsSwapServer && !allowContractAddress &&
-		!b.ChainConfig.IsInCallByContractWhitelist(bindAddr) {
+	if params.IsSwapServer && token.ContractAddress != "" &&
+		!common.IsEqualIgnoreCase(swapInfo.TxTo, token.ContractAddress) &&
+		!b.ChainConfig.IsInCallByContractWhitelist(swapInfo.TxTo) {
 		isContract, err := b.IsContractAddress(bindAddr)
 		if err != nil {
 			log.Warn("query is contract address failed", "bindAddr", bindAddr, "err", err)

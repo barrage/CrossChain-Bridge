@@ -52,9 +52,9 @@ type RPCTransaction struct {
 	Recipient    *common.Address `json:"to"`
 	Amount       *hexutil.Big    `json:"value"`
 	Payload      *hexutil.Bytes  `json:"input"`
-	V            *hexutil.Big    `json:"v"`
-	R            *hexutil.Big    `json:"r"`
-	S            *hexutil.Big    `json:"s"`
+	V            *string         `json:"v"`
+	R            *string         `json:"r"`
+	S            *string         `json:"s"` // telos chain may has leading zero
 	ChainID      *hexutil.Big    `json:"chainId,omitempty"`
 }
 
@@ -97,6 +97,11 @@ type RPCTxReceipt struct {
 	Recipient   *common.Address `json:"to"`
 	GasUsed     *hexutil.Uint64 `json:"gasUsed"`
 	Logs        []*RPCLog       `json:"logs"`
+}
+
+// IsStatusOk is status ok
+func (r *RPCTxReceipt) IsStatusOk() bool {
+	return r != nil && r.Status != nil && *r.Status == 1
 }
 
 // FilterQuery struct

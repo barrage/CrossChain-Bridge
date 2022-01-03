@@ -81,6 +81,7 @@ type ChainConfig struct {
 	MaxReplaceCount            int
 	FixedGasPrice              string `json:",omitempty"`
 	MaxGasPrice                string `json:",omitempty"`
+	MinGasPrice                string `json:",omitempty"`
 
 	PlusGasTipCapPercent uint64
 	PlusGasFeeCapPercent uint64
@@ -89,13 +90,21 @@ type ChainConfig struct {
 	MaxGasFeeCap         string
 
 	// cached values
+	chainID       *big.Int
 	fixedGasPrice *big.Int
 	maxGasPrice   *big.Int
+	minGasPrice   *big.Int
 	minReserveFee *big.Int
 	maxGasTipCap  *big.Int
 	maxGasFeeCap  *big.Int
 
 	callByContractWhitelist map[string]struct{}
+}
+
+// TokenPriceConfig struct
+type TokenPriceConfig struct {
+	Contract   string
+	APIAddress []string
 }
 
 // TokenConfig struct
@@ -116,7 +125,8 @@ type TokenConfig struct {
 	SwapFeeRate            *float64
 	MaximumSwapFee         *float64
 	MinimumSwapFee         *float64
-	PlusGasPricePercentage uint64 `json:",omitempty"`
+	TokenPrice             float64 `toml:"-"`
+	PlusGasPricePercentage uint64  `json:",omitempty"`
 	DisableSwap            bool
 	IsDelegateContract     bool
 	DelegateToken          string `json:",omitempty"`
@@ -126,6 +136,8 @@ type TokenConfig struct {
 	DefaultGasLimit          uint64 `json:",omitempty"`
 	AllowSwapinFromContract  bool   `json:",omitempty"`
 	AllowSwapoutFromContract bool   `json:",omitempty"`
+
+	BigValueWhitelist []string `json:",omitempty"`
 
 	// use private key address instead
 	DcrmAddressKeyStore string `json:"-"`
@@ -139,6 +151,8 @@ type TokenConfig struct {
 	maxSwapFee       *big.Int
 	minSwapFee       *big.Int
 	bigValThreshhold *big.Int
+
+	bigValueWhitelist map[string]struct{}
 }
 
 // CheckConfig check chain config
@@ -166,22 +180,29 @@ func (c *ChainConfig) CheckConfig(isServer bool) error {
 	}
 	if c.BaseGasPrice != "" {
 		if _, err := common.GetBigIntFromStr(c.BaseGasPrice); err != nil {
-			return errors.New("wrong 'BaseGasPrice'")
+			return fmt.Errorf("wrong BaseGasPrice: %w", err)
 		}
 	}
 	if c.FixedGasPrice != "" {
 		fixedGasPrice, err := common.GetBigIntFromStr(c.FixedGasPrice)
 		if err != nil {
-			return err
+			return fmt.Errorf("wrong FixedGasPrice: %w", err)
 		}
 		c.fixedGasPrice = fixedGasPrice
 	}
 	if c.MaxGasPrice != "" {
 		maxGasPrice, err := common.GetBigIntFromStr(c.MaxGasPrice)
 		if err != nil {
-			return err
+			return fmt.Errorf("wrong MaxGasPrice: %w", err)
 		}
 		c.maxGasPrice = maxGasPrice
+	}
+	if c.MinGasPrice != "" {
+		minGasPrice, err := common.GetBigIntFromStr(c.MinGasPrice)
+		if err != nil {
+			return fmt.Errorf("wrong MinGasPrice: %w", err)
+		}
+		c.minGasPrice = minGasPrice
 	}
 	if c.MinReserveFee != "" {
 		bi, ok := new(big.Int).SetString(c.MinReserveFee, 10)
@@ -239,10 +260,19 @@ func (c *ChainConfig) CheckConfig(isServer bool) error {
 			}
 		}
 	}
+	if c.minGasPrice != nil {
+		if c.fixedGasPrice != nil {
+			return errors.New("FixedGasPrice and MinGasPrice are conflicted")
+		}
+		if c.maxGasPrice != nil && c.minGasPrice.Cmp(c.maxGasPrice) > 0 {
+			return errors.New("MinGasPrice > MaxGasPrice")
+		}
+	}
 	log.Info("check chain config success",
 		"blockChain", c.BlockChain,
 		"fixedGasPrice", c.FixedGasPrice,
 		"maxGasPrice", c.MaxGasPrice,
+		"minGasPrice", c.MinGasPrice,
 		"baseFeePercent", c.BaseFeePercent,
 	)
 	return nil
@@ -250,7 +280,7 @@ func (c *ChainConfig) CheckConfig(isServer bool) error {
 
 // CheckConfig check token config
 //nolint:funlen,gocyclo // keep TokenConfig check as whole
-func (c *TokenConfig) CheckConfig(isSrc bool) error {
+func (c *TokenConfig) CheckConfig(isSrc bool) (err error) {
 	if c.Decimals == nil {
 		return errors.New("token must config 'Decimals'")
 	}
@@ -333,9 +363,13 @@ func (c *TokenConfig) CheckConfig(isSrc bool) error {
 	} else if c.DelegateToken != "" {
 		return errors.New("token forbid config 'DelegateToken' if 'IsDelegateContract' is false")
 	}
-	// calc value and store
+	c.TokenPrice = 0
+	err = c.loadTokenPrice(isSrc)
+	if err != nil {
+		return err
+	}
 	c.CalcAndStoreValue()
-	err := c.LoadDcrmAddressPrivateKey()
+	err = c.LoadDcrmAddressPrivateKey()
 	if err != nil {
 		return err
 	}
@@ -343,13 +377,63 @@ func (c *TokenConfig) CheckConfig(isSrc bool) error {
 	if err != nil {
 		return err
 	}
+	if len(c.BigValueWhitelist) > 0 {
+		c.bigValueWhitelist = make(map[string]struct{}, len(c.BigValueWhitelist))
+		for _, addr := range c.BigValueWhitelist {
+			if !common.IsHexAddress(addr) {
+				return fmt.Errorf("wrong address '%v' in 'BigValueWhitelist'", addr)
+			}
+			key := strings.ToLower(addr)
+			if _, exist := c.bigValueWhitelist[key]; exist {
+				return fmt.Errorf("duplicate address '%v' in 'BigValueWhitelist'", addr)
+			}
+			c.bigValueWhitelist[key] = struct{}{}
+		}
+	}
 	log.Info("check token config success",
 		"id", c.ID, "name", c.Name, "symbol", c.Symbol, "decimals", *c.Decimals,
 		"depositAddress", c.DepositAddress, "contractAddress", c.ContractAddress,
-		"maxSwap", c.maxSwap, "minSwap", c.minSwap,
-		"maxSwapFee", c.maxSwapFee, "minSwapFee", c.minSwapFee, "bigValThreshhold", c.bigValThreshhold,
 	)
 	return nil
+}
+
+// CalcAndStoreValue calc and store value (minus duplicate calculation)
+func (c *TokenConfig) CalcAndStoreValue() {
+	maxSwap := *c.MaximumSwap
+	minSwap := *c.MinimumSwap
+	bigSwap := *c.BigValueThreshold
+	maxFee := *c.MaximumSwapFee
+	minFee := *c.MinimumSwapFee
+	if c.TokenPrice > 0 {
+		// convert to token amount
+		maxSwap /= c.TokenPrice
+		minSwap /= c.TokenPrice
+		bigSwap /= c.TokenPrice
+		maxFee /= c.TokenPrice
+		minFee /= c.TokenPrice
+	}
+	smallBiasValue := 0.0001
+	c.maxSwap = ToBits(maxSwap+smallBiasValue, *c.Decimals)
+	c.minSwap = ToBits(minSwap-smallBiasValue, *c.Decimals)
+	c.maxSwapFee = ToBits(maxFee, *c.Decimals)
+	c.minSwapFee = ToBits(minFee, *c.Decimals)
+	c.bigValThreshhold = ToBits(bigSwap+smallBiasValue, *c.Decimals)
+	log.Info("calc and store token swap and fee success",
+		"name", c.Name, "decimals", *c.Decimals, "contractAddress", c.ContractAddress,
+		"maxSwap", c.maxSwap, "minSwap", c.minSwap, "bigValThreshhold", c.bigValThreshhold,
+		"maxSwapFee", c.maxSwapFee, "minSwapFee", c.minSwapFee, "swapFeeRate", c.SwapFeeRate,
+		"bigValueWhitelist", c.bigValueWhitelist,
+	)
+}
+
+// SetChainID set chainID
+func (c *ChainConfig) SetChainID(chainID *big.Int) {
+	c.chainID = chainID
+}
+
+// GetChainID get chainID
+func (c *ChainConfig) GetChainID() *big.Int {
+	return c.chainID
 }
 
 // IsInCallByContractWhitelist is in call by contract whitelist
@@ -359,6 +443,11 @@ func (c *ChainConfig) IsInCallByContractWhitelist(caller string) bool {
 	}
 	_, exist := c.callByContractWhitelist[strings.ToLower(caller)]
 	return exist
+}
+
+// IsFixedGasPrice is fixed gas price
+func (c *ChainConfig) IsFixedGasPrice() bool {
+	return c.fixedGasPrice != nil
 }
 
 // GetFixedGasPrice get fixed gas price
@@ -373,6 +462,14 @@ func (c *ChainConfig) GetFixedGasPrice() *big.Int {
 func (c *ChainConfig) GetMaxGasPrice() *big.Int {
 	if c.maxGasPrice != nil {
 		return new(big.Int).Set(c.maxGasPrice) // clone
+	}
+	return nil
+}
+
+// GetMinGasPrice get min gas price
+func (c *ChainConfig) GetMinGasPrice() *big.Int {
+	if c.minGasPrice != nil {
+		return new(big.Int).Set(c.minGasPrice) // clone
 	}
 	return nil
 }
@@ -402,14 +499,13 @@ func (c *TokenConfig) IsProxyErc20() bool {
 	return strings.EqualFold(c.ID, "ProxyERC20")
 }
 
-// CalcAndStoreValue calc and store value (minus duplicate calculation)
-func (c *TokenConfig) CalcAndStoreValue() {
-	smallBiasValue := 0.0001
-	c.maxSwap = ToBits(*c.MaximumSwap+smallBiasValue, *c.Decimals)
-	c.minSwap = ToBits(*c.MinimumSwap-smallBiasValue, *c.Decimals)
-	c.maxSwapFee = ToBits(*c.MaximumSwapFee, *c.Decimals)
-	c.minSwapFee = ToBits(*c.MinimumSwapFee, *c.Decimals)
-	c.bigValThreshhold = ToBits(*c.BigValueThreshold+smallBiasValue, *c.Decimals)
+// IsInBigValueWhitelist is in big value whitelist
+func (c *TokenConfig) IsInBigValueWhitelist(caller string) bool {
+	if c.bigValueWhitelist == nil {
+		return false
+	}
+	_, exist := c.bigValueWhitelist[strings.ToLower(caller)]
+	return exist
 }
 
 // GetDcrmAddressPrivateKey get private key
