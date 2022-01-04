@@ -189,7 +189,7 @@ func (b *Bridge) FindUtxos(addr string) (utxos []*electrs.ElectUtxo, err error) 
 
 		if err0 == nil {
 			for _, cutxo := range res.Utxos {
-				value := uint64(cutxo.Value * 1e8)
+				value := uint64(cutxo.Value * 1e6)
 
 				status := &electrs.ElectTxStatus{
 					BlockHeight: &cutxo.BlockNumber,
@@ -458,7 +458,7 @@ func (b *Bridge) EstimateFeePerKb(blocks int) (fee int64, err error) {
 				errs = append(errs, fmt.Errorf("%+v", res.Errors))
 				continue
 			}
-			return int64(*res.FeeRate * 1e8), nil
+			return int64(*res.FeeRate * 1e6), nil
 		}
 		errs = append(errs, err0)
 	}

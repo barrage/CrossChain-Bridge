@@ -156,6 +156,6 @@ func ConvertVout(vout *btcjson.Vout) *electrs.ElectTxOut {
 	if len(vout.ScriptPubKey.Addresses) > 1 {
 		*evout.ScriptpubkeyAddress = fmt.Sprintf("%+v", vout.ScriptPubKey.Addresses)
 	}
-	*evout.Value = uint64(vout.Value * 1e8)
+	*evout.Value = uint64(vout.Value * 1e6)
 	return evout
 }

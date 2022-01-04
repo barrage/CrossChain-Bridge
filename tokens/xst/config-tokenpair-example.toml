@@ -6,7 +6,7 @@ PairID = "XST"
 ID = "XST"
 Name = "Stealth"
 Symbol = "XST"
-Decimals = 8
+Decimals = 6
 Description = "Stealth"
 # if ID is ERC20, this is the erc20 token's contract address
 ContractAddress = ""
@@ -39,7 +39,7 @@ DisableSwap = false
 ID = "anyXST"
 Name = "AnyStealth coin"
 Symbol = "anyXST"
-Decimals = 8
+Decimals = 6
 Description = "cross chain bridge XST with anyXST"
 # mapping erc20 token address
 ContractAddress = "0xe1b02a6255ac84485cc5df2c457acedcb59fd536"

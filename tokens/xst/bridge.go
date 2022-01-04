@@ -56,8 +56,8 @@ func (b *Bridge) VerifyTokenConfig(tokenCfg *tokens.TokenConfig) error {
 	if !b.IsValidAddress(tokenCfg.DepositAddress) {
 		return fmt.Errorf("invalid deposit address: %v", tokenCfg.DepositAddress)
 	}
-	if strings.EqualFold(tokenCfg.Symbol, "XST") && *tokenCfg.Decimals != 8 {
-		return fmt.Errorf("invalid decimals for XST: want 8 but have %v", *tokenCfg.Decimals)
+	if strings.EqualFold(tokenCfg.Symbol, "XST") && *tokenCfg.Decimals != 6 {
+		return fmt.Errorf("invalid decimals for XST: want 6 but have %v", *tokenCfg.Decimals)
 	}
 	return nil
 }

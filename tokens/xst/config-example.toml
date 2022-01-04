@@ -10,9 +10,9 @@ Admins = [
 # modgodb database connection config (server only)
 [MongoDB]
 DBURL = "localhost:27017"
-DBName = "databasename"
-UserName = "username"
-Password = "password"
+DBName = "swap"
+UserName = "testko"
+Password = "11223344"
 
 # bridge API service (server only)
 [APIServer]
@@ -25,25 +25,6 @@ AllowedOrigins = []
 [Oracle]
 # post swap register RPC requests to this server
 ServerAPIAddress = "http://127.0.0.1:11556/rpc"
-
-# customize fees in building btc transaction (btc only)
-[BtcExtra]
-# minimum relay fee of tx (much greater than BTC!!!)
-MinRelayFee = 3000
-# relay fee per kilobytes
-MinRelayFeePerKb = 10000
-# maximum relay fee per kilobytes
-MaxRelayFeePerKb = 500000
-# plus percentage of estimate fee to speed tx packing
-PlusFeePercentage = 0
-# estimate smart fee with such many target blocks
-EstimateFeeBlocks = 6
-# aggregate if have more than so many utxos
-UtxoAggregateMinCount = 20
-# aggregate if have more than so many value
-UtxoAggregateMinValue = 1000000 # unit satoshi
-# aggreate to this address
-UtxoAggregateToAddress = "BpeGP9ooFTGSsdcysmMMgbRCqYQgpjrCsE"
 
 # source chain config
 [SrcChain]
@@ -58,15 +39,7 @@ EnableScan = false
 
 # source blockchain gateway config
 [SrcGateway]
-APIAddress = ["5.189.139.168:51515"]
-[SrcGateway.Extras]
-[SrcGateway.Extras.BlockExtra]
-UTXOAPIAddresses = ["https://plugin-dev.core.cloudchainsinc.com"]
-[[SrcGateway.Extras.BlockExtra.CoreAPIs]]
-APIAddress = ""
-RPCUser = ""
-RPCPassword = ""
-DisableTLS = ""
+APIAddress = ["https://api-mainnet-latest.stealthmonitor.xyz/"]
 
 # dest chain config
 [DestChain]
@@ -81,7 +54,7 @@ EnableScan = false
 
 # dest blockchain gateway config
 [DestGateway]
-APIAddress = ["http://5.189.139.168:8018"]
+APIAddress = ["https://eth2.testing.barrage.net] # it can be any full node that can relay transactions
 
 # DCRM config
 [Dcrm]
